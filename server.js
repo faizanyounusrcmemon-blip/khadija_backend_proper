@@ -1,94 +1,46 @@
 import express from "express";
 import cors from "cors";
-import { createClient } from "@supabase/supabase-js";
 import dotenv from "dotenv";
-import { google } from "googleapis";
-import archiver from "archiver";
-import fs from "fs";
-import path from "path";
+import { exec } from "child_process";
 
 dotenv.config();
+
 const app = express();
-app.use(cors());
 app.use(express.json());
 
-const supabase = createClient(process.env.SUPABASE_URL, process.env.SUPABASE_KEY);
+// ⭐ Allow all frontend origins (Fix CORS)
+app.use(cors({
+  origin: "*",
+  methods: ["GET", "POST"],
+  allowedHeaders: ["Content-Type"],
+}));
 
-// -------------------- TEST ROUTE --------------------
+// ⭐ Test Route
 app.get("/", (req, res) => {
   res.send("Khadija Jewellery Backend Working");
 });
 
-// -------------------- BACKUP ROUTE --------------------
-app.post("/api/backup", async (req, res) => {
-  try {
-    const tables = ["sales", "purchases", "items", "customers", "app_users"];
-    const backupFolder = "backup_temp";
+// ⭐ BACKUP API ROUTE
+app.post("/api/backup", (req, res) => {
+  console.log("Backup API Called");
 
-    if (!fs.existsSync(backupFolder)) fs.mkdirSync(backupFolder);
-
-    // Download all tables
-    for (const table of tables) {
-      const { data, error } = await supabase.from(table).select("*");
-
-      if (error) console.log(error);
-
-      fs.writeFileSync(
-        `${backupFolder}/${table}.json`,
-        JSON.stringify(data, null, 2)
-      );
+  // Run your Python backup script
+  exec("python backup_to_drive.py", (error, stdout, stderr) => {
+    if (error) {
+      console.log("Backup Error:", error);
+      return res.status(500).json({ message: "Backup Failed", error });
     }
 
-    // Create ZIP
-    const zipName = `backup_${Date.now()}.zip`;
-    const zipPath = path.join(backupFolder, zipName);
-
-    const output = fs.createWriteStream(zipPath);
-    const archive = archiver("zip");
-
-    archive.pipe(output);
-
-    fs.readdirSync(backupFolder).forEach((file) => {
-      if (!file.endsWith(".zip")) {
-        archive.file(`${backupFolder}/${file}`, { name: file });
-      }
+    return res.json({
+      message: "Backup Completed Successfully",
+      output: stdout
     });
-
-    await archive.finalize();
-
-    // Upload ZIP to Google Drive using Service Account
-    const auth = new google.auth.GoogleAuth({
-      credentials: JSON.parse(process.env.GOOGLE_SERVICE_ACCOUNT),
-      scopes: ["https://www.googleapis.com/auth/drive"],
-    });
-
-    const drive = google.drive({ version: "v3", auth });
-
-    const fileMeta = {
-      name: zipName,
-      parents: [process.env.GOOGLE_DRIVE_FOLDER_ID],
-    };
-
-    const media = {
-      mimeType: "application/zip",
-      body: fs.createReadStream(zipPath),
-    };
-
-    await drive.files.create({
-      resource: fileMeta,
-      media: media,
-      fields: "id",
-    });
-
-    res.json({ success: true, message: "Backup uploaded successfully" });
-
-  } catch (err) {
-    console.log(err);
-    res.status(500).json({ success: false, error: err.message });
-  }
+  });
 });
 
-// -------------------- START SERVER --------------------
+// ⭐ Required for Vercel
 app.listen(5000, () => {
   console.log("Backend running on port 5000");
 });
+
+export default app;
