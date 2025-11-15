@@ -21,16 +21,15 @@ export default async function backupToDrive() {
 
   for (let table of tables) {
     const { data, error } = await supabase.from(table).select("*");
-
     if (error) throw new Error(error.message);
 
     const csvPath = `${backupDir}/${table}.csv`;
-    const csvContent =
+    const csv =
       Object.keys(data[0] || {}).join(",") +
       "\n" +
       data.map((row) => Object.values(row).join(",")).join("\n");
 
-    fs.writeFileSync(csvPath, csvContent);
+    fs.writeFileSync(csvPath, csv);
     csvFiles.push(csvPath);
   }
 
@@ -40,11 +39,12 @@ export default async function backupToDrive() {
 
   const output = fs.createWriteStream(zipPath);
   const archive = archiver("zip");
-
   archive.pipe(output);
-  csvFiles.forEach(file => {
+
+  csvFiles.forEach((file) => {
     archive.file(file, { name: path.basename(file) });
   });
+
   await archive.finalize();
 
   // GOOGLE UPLOAD
@@ -55,21 +55,10 @@ export default async function backupToDrive() {
 
   const drive = google.drive({ version: "v3", auth });
 
-  const fileMeta = {
-    name: zipName,
-    parents: [GOOGLE_DRIVE_FOLDER_ID],
-  };
-
-  const media = {
-    mimeType: "application/zip",
-    body: fs.createReadStream(zipPath),
-  };
-
   await drive.files.create({
-    resource: fileMeta,
-    media: media,
-    fields: "id",
+    resource: { name: zipName, parents: [GOOGLE_DRIVE_FOLDER_ID] },
+    media: { mimeType: "application/zip", body: fs.createReadStream(zipPath) },
   });
 
-  return `Backup uploaded as ${zipName}`;
+  return `Backup uploaded → ${zipName}`;
 }
