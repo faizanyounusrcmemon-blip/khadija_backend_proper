@@ -6,26 +6,26 @@ const app = express();
 app.use(express.json());
 app.use(cors());
 
-// ---------------------------------------
-// TEST ROUTE
-// ---------------------------------------
+// --------------------------------------
+// ROOT TEST ROUTE
+// --------------------------------------
 app.get("/", (req, res) => {
-  res.send("Khadija Jewellery Backend Working");
+  res.send("Khadija Jewellery Backend Running Successfully ✔");
 });
 
-// ---------------------------------------
+// --------------------------------------
 // BACKUP ROUTE
-// ---------------------------------------
+// --------------------------------------
 app.post("/api/backup", async (req, res) => {
   try {
-    const result = await backupToDrive();
-    res.json({ success: true, message: result });
+    const message = await backupToDrive();
+    res.json({ success: true, message });
   } catch (err) {
-    res.status(500).json({ success: false, message: err.message });
+    res.status(500).json({
+      success: false,
+      message: "Backup Failed: " + err.message
+    });
   }
 });
 
-// ---------------------------------------
-// Vercel Export
-// ---------------------------------------
 export default app;
